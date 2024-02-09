@@ -1,8 +1,8 @@
-package ru.hh.kafkahw.internal;
+package ru.hh.kafkahw;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import ru.hh.kafkahw.KafkaProducer;
+import ru.hh.kafkahw.internal.KafkaProducer;
 
 @Component
 public class Sender {

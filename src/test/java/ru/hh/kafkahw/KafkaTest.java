@@ -30,7 +30,6 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
-import ru.hh.kafkahw.internal.Sender;
 import ru.hh.kafkahw.internal.Service;
 
 @RunWith(SpringRunner.class)
