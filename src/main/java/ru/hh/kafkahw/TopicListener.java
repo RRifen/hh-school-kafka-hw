@@ -9,10 +9,14 @@ import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 import ru.hh.kafkahw.internal.Service;
 
+import java.util.HashSet;
+import java.util.Set;
+
 @Component
 public class TopicListener {
   private final static Logger LOGGER = LoggerFactory.getLogger(TopicListener.class);
   private final Service service;
+  private final Set<String> receivedMessages = new HashSet<>();
 
   @Autowired
   public TopicListener(Service service) {
@@ -20,44 +24,59 @@ public class TopicListener {
   }
 
   /*
-  Для семантики atMostOnce достаточно просто проигнорировать исключение.
-  Сообщение может не успеть обработаться, но это не страшно.
-  Исключение необходимо ловить в блоке try, потому что обработчик ошибок по умолчанию
-  заново прочитает сообщение из брокера, даже если успеть закоммитить offset (ack.acknowledge)
+  Обрабатываем только те сообщения, которые были отправлены с первой попытки.
+  Игнорируем исключения возникающие в методе handle()
    */
   @KafkaListener(topics = "topic1", groupId = "group1")
   public void atMostOnce(ConsumerRecord<?, String> consumerRecord, Acknowledgment ack) {
     LOGGER.info("Try handle message, topic {}, payload {}", consumerRecord.topic(), consumerRecord.value());
-    ack.acknowledge();
-    try {
-      service.handle("topic1", consumerRecord.value());
-    } catch(RuntimeException ignored) {
+    String value = consumerRecord.value();
+    if (isFirstAttempt(value)) {
+      ack.acknowledge();
+      try {
+        service.handle("topic1", retrieveMessage(value));
+      } catch(RuntimeException ignore) {
+      }
     }
   }
 
   /*
-  Для семантики atLeastOnce по сути надо было только исправить Producer.
-  Дефолтный обработчик ошибок сам вернет offset если вылезло исключение.
-  При этом одно и то же сообщение может обработаться более одного раза,
-  так как исключение может вылезти уже после обработки сообщения
+  Не важно с какой попытки было отправлено сообщение.
+  Исключение в методе handle() обработает дефолтный обработчик и вернет offset на прежнее место
    */
   @KafkaListener(topics = "topic2", groupId = "group2")
   public void atLeastOnce(ConsumerRecord<?, String> consumerRecord, Acknowledgment ack) {
     LOGGER.info("Try handle message, topic {}, payload {}", consumerRecord.topic(), consumerRecord.value());
-    service.handle("topic2", consumerRecord.value());
+    String value = consumerRecord.value();
+    service.handle("topic2", retrieveMessage(value));
     ack.acknowledge();
   }
 
   /*
-  Здесь все сложно. Так как ошибка может возникнуть либо до, либо после обработки,
-  то без изменения класса Service не обойтись, можно реализовать тот же механизм ретраев, как в продюсере.
-  Либо можно реализовать семантику atLeastOnce, тогда вероятность того,
-  что сообщение обработается более одного раза будет 2% - random.nextInt(100) < 2.
+  Чтобы реализовать exactlyOnce было добавлено множество, в котором хранятся обработанные сообщения
    */
   @KafkaListener(topics = "topic3", groupId = "group3")
   public void exactlyOnce(ConsumerRecord<?, String> consumerRecord, Acknowledgment ack) {
     LOGGER.info("Try handle message, topic {}, payload {}", consumerRecord.topic(), consumerRecord.value());
-    service.handle("topic3", consumerRecord.value());
-    ack.acknowledge();
+    String value = consumerRecord.value();
+    String message = retrieveMessage(value);
+    if (isFirstAttempt(value) || !receivedMessages.contains(message)) {
+      service.handle("topic3", message);
+      ack.acknowledge();
+      receivedMessages.add(message);
+    }
+  }
+
+  /*
+  Отделяем сообщения от хвоста с номером попытки
+   */
+  private String retrieveMessage(String value) {
+    int delimiterIndex = value.lastIndexOf('#');
+    return value.substring(0, delimiterIndex);
+  }
+
+  private boolean isFirstAttempt(String value) {
+    int firstNumberIndex = value.lastIndexOf('#') + 1;
+    return value.substring(firstNumberIndex).equals("0");
   }
 }

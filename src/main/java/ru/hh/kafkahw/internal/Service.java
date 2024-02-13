@@ -12,10 +12,6 @@ public class Service {
   private final ConcurrentMap<String, ConcurrentMap<String, AtomicInteger>> counters = new ConcurrentHashMap<>();
   private final Random random = new Random();
 
-  /*
-  Реализовал ту же логику, что и в продюсере. Ретраим до тех пор, пока не сделаем инкремент,
-  и ставим флаг об успешной обработке, до того как вызовется второе исключение.
-   */
   public void handle(String topic, String message) {
     boolean isCompute = false;
     while(!isCompute) {
@@ -23,6 +19,11 @@ public class Service {
     }
   }
 
+  /*
+  Здесь я так и не придумал как реализовать exactlyOnce,
+  поэтому просто между исключениями выставляю флаг,
+  чтобы удостовериться, что сообщение было обработано
+ */
   private boolean tryHandle(String topic, String message) {
     boolean isCompute = false;
     try {

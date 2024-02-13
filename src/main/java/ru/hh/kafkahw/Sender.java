@@ -13,10 +13,24 @@ public class Sender {
     this.producer = producer;
   }
 
+  /*
+  В методе send() ошибка может возникнуть либо до отправки, либо после.
+  Простое игнорирование исключения не даст реализовать atLeastOnce.
+  Если заново отправлять исключение каждый раз, когда возникает ошибка,
+  то не получится реализовать atMostOnce
+  Поэтому в сообщение был добавлен номер попытки
+   */
   public void doSomething(String topic, String message) {
-    try {
-      producer.send(topic, message);
-    } catch (Exception ignore) {
+    boolean atLeastOnceSent = false;
+    int attemptId = 0;
+    while(!atLeastOnceSent) {
+      try {
+        String payload = message + "#" + attemptId;
+        producer.send(topic, payload);
+        atLeastOnceSent = true;
+      } catch (Exception e) {
+        attemptId++;
+      }
     }
   }
 }
